@@ -3,6 +3,7 @@
 library(shiny)
 library(ggplot2)
 library(dplyr)
+library(tidyr)
 library(gtools)
 library(pracma)
 library(scales)
@@ -79,19 +80,21 @@ ptvap <- function(RT, tau, SD, K, v) {
   }
 }
 
-
-pscore <- function(score, exposure_duration, nS, nD, C, alpha, K, t0) {
+lscore <- function(score, exposure_duration, nS, nD, C, alpha, K, t0) {
   w <- c(rep(1,nS-nD),rep(alpha,nD))
-  exp(lchoose(nS-nD,score)+ptvap(
+  lchoose(nS-nD,score)+ptvap(
     c(rep(TRUE,score),rep(FALSE,nS-score)),
     exposure_duration - t0,
     c(rep(FALSE,nS-nD),rep(TRUE,nD)),
     K,
     C/1000*w/sum(w)
-  ))
+  )
 }
 
-pscorev <- Vectorize(pscore, c("score","exposure_duration"))
+lscorev <- Vectorize(lscore, c("score","exposure_duration"))
+
+pscore <- function(...) exp(lscore(...))
+pscorev <- function(...) exp(lscorev(...))
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -106,7 +109,7 @@ ui <- fluidPage(
         numericInput("items",
                      "Number of items:",
                      min = 2,
-                     max = 8,
+                     max = 12,
                      step = 2,
                      value = 6,
                      width = "100%"),
@@ -127,15 +130,13 @@ ui <- fluidPage(
         ),
         sliderInput("param_t0","\U1D461\U2080",min=-50,max=50,value=10),
         sliderInput("param_K","\U1D43E",min=0,max=6,value=4),
-        conditionalPanel("input.distractors > 0",
-                         sliderInput("param_alpha",
-                                     "\U1D6FC",
-                                     min = 0,
-                                     max = 2,
-                                     step = 0.1,
-                                     value = 0.6
-                         )
-        )
+         sliderInput("param_alpha",
+                     "\U1D6FC",
+                     min = 0,
+                     max = 2,
+                     step = 0.1,
+                     value = 0.6
+         )
       )
     ),
     
@@ -154,7 +155,7 @@ ui <- fluidPage(
         tabPanel(
           "Processing",
           tags$h2("Theoretical processing times"),
-          tags$p("The processing capacity \U1D436 can be interpreted as the theoretical number of items that could be processed per second if memory were unlimited. Depending on the specific model implementation, TVA can make different assumptions about the distribution of \U1D436 across items. In this app, we assume it is equally distributed across locations but that targets and distractors differ with regard to their relative share, such that a distractor receives \U1D6FC-times the processing of a target. This is called, ",tags$strong("filtering"),". The individual processing rates are given as: $$v_i=C\\frac{w_i}{\\sum_{j} w_j}; w_i=\\begin{cases} \\alpha & \\text{if } i \\in D  \\\\ 1 & \\text{if } i \\notin D \\end{cases} $$" %>% withMathJax()),
+          tags$p("The processing capacity \U1D436 can be interpreted as the theoretical number of items that could be processed per second if memory were unlimited. Depending on the specific model implementation, TVA can make different assumptions about the distribution of \U1D436 across items. In this app, we assume it is equally distributed across locations but that targets and distractors differ with regard to their relative share, such that a distractor receives \U1D6FC-times the processing of a target. This is called ",tags$strong("filtering"),". The individual processing rates are given as: $$v_i=C\\frac{w_i}{\\sum_{j} w_j}; w_i=\\begin{cases} \\alpha & \\text{if } i \\in D  \\\\ 1 & \\text{if } i \\notin D \\end{cases} $$" %>% withMathJax()),
           tags$p("TVA assumes that all items are processed ",tags$strong("in parallel")," and that each item’s processing time is exponentially distributed, so that the probability that item \U1D456 is processed sometime before \U1D461 is given as $$\\Pr\\left(i,T\\leq t\\right)=1-\\exp(-t v_i).$$" %>% withMathJax()),
           conditionalPanel("input.distractors > 0", tags$p(HTML("The theoretical processing time distributions for <font color=red>targets</font> vs. <font color=blue>distractors</font> look as follows:"))),
           conditionalPanel("input.distractors == 0", tags$p(HTML("The theoretical processing time distribution for <font color=red>targets</font> looks as follows:"))),
@@ -187,11 +188,11 @@ ui <- fluidPage(
         tabPanel(
           "Simulate subject",
           tags$h2("Simulate a subject data set"),
-          tags$p("Here, you can simulate many trials with different display settings. The parameters on the left are assumed to be the same for all trials. By default, the table below lists the configuration of a typical CombiTVA paradigm with 6 items and varying numbers of distractors and exposure durations. You can edit, add, and remove settings."),
+          tags$p("Here, you can simulate many trials with different display settings. The parameters on the left are assumed to be the same for all trials. By default, the table below lists the configuration of a typical CombiTVA paradigm with 6 items and varying numbers of distractors and exposure durations. You can edit, add, and remove settings (by right click)."),
           rHandsontableOutput("simtab"),
           tags$p("By ",actionLink("simulate","clicking here"),", you can run the simulation as configured above. The columns ",tags$strong("MeanScore")," and ",tags$strong("SEScore")," will be filled in with the mean and standard error of the simulated trials, respectively. You can, however, also fill in or edit those columns by hand. When the table above changes, the values are also visualized in the plot below:"),
           plotOutput("simscores"),
-          tags$p(" Solid lines connect mean scores for the same display type over its different exposure durations, if any. Error bars represent simple standard errors around those means. The dashed lines represent the theoretical (predicted) mean scores for the different display types. You should observe that the predicted curves align with the observed scores.")
+          tags$p("Solid lines connect mean scores for the same display type over its different exposure durations, if any. Error bars represent simple standard errors around those means. The dashed lines represent the theoretical (predicted) mean scores for the different display types. You should observe that the predicted curves align with the observed scores.")
         )
       )
     )
@@ -227,6 +228,10 @@ server <- function(input, output, session) {
     if(input$items <= input$distractors) updateNumericInput(inputId = "distractors", value = input$items - 1L)
     updateSliderInput(inputId ="param_K", max = input$items)
     if(input$param_K > input$items) updateSliderInput(inputId ="param_K", value = input$items)
+  })
+  
+  max_score <- reactive({
+    min(input$param_K, input$items-input$distractors)
   })
   
   items <- reactive({
@@ -365,8 +370,10 @@ server <- function(input, output, session) {
     plot_grid(
       ggplot() +
         theme_minimal() +
-        geom_function(fun = function(x) if_else(x <= input$param_t0, 0, pexp(x-input$param_t0, input$param_C/1000/wsum)), color = "red") +
-        (if(input$distractors > 0L) geom_function(fun = function(x) if_else(x <= input$param_t0, 0, pexp(x-input$param_t0, input$param_C/1000*input$param_alpha/wsum)), color = "blue", linetype = if(input$param_alpha!=1) "solid" else "dashed")) +
+        geom_function(fun = function(x) if_else(x <= input$param_t0, 0, pexp(x-input$param_t0, input$param_C/1000/wsum)), xlim = c(input$param_t0,upper_bound()), color = "red") +
+        (if(input$distractors > 0L) geom_function(fun = function(x) if_else(x <= input$param_t0, 0, pexp(x-input$param_t0, input$param_C/1000*input$param_alpha/wsum)), xlim = c(input$param_t0,upper_bound()), color = "blue", linetype = if(input$param_alpha!=1) "solid" else "dashed")) +
+        annotate("segment", y = 0, x = 0, xend = input$param_t0, color = "red") +
+        (if(input$distractors > 0L) annotate("segment", y = 0, x = 0, xend = input$param_t0, color = "blue", linetype = "dashed")) +
         scale_x_continuous(limits = c(0,upper_bound()), name = "Exposure duration") +
         scale_y_continuous(name = "Cumulative processing probability"),
       ggplot() +
@@ -416,17 +423,16 @@ server <- function(input, output, session) {
   
   output$theoreticalprobs <- renderPlot({
     x <- seq(0,upper_bound(),length.out=200)
-    max_score <- min(input$items-input$distractors,input$param_K)
-    scores <- crossing(exposure_duration = x, score = 0:max_score) %>% mutate(p = pscorev(score,exposure_duration,input$items,input$distractors,input$param_C,input$param_alpha,input$param_K,input$param_t0))
-    expected_score <- rowSums(as.matrix(vapply(0:max_score, function(i) if(i==0) rep(0,length(x)) else i*pscorev(i,x,input$items,input$distractors,input$param_C,input$param_alpha,input$param_K,input$param_t0), double(length(x)))))
+    scores <- crossing(exposure_duration = x, score = 0:max_score()) %>% mutate(p = pscorev(score,exposure_duration,input$items,input$distractors,input$param_C,input$param_alpha,input$param_K,input$param_t0))
+    expected_score <- rowSums(as.matrix(vapply(0:max_score(), function(i) if(i==0) rep(0,length(x)) else i*pscorev(i,x,input$items,input$distractors,input$param_C,input$param_alpha,input$param_K,input$param_t0), double(length(x)))))
     ggplot() +
       theme_minimal() +
       theme(legend.position = "bottom") +
       labs(x="Exposure duration", color = "Score") +
       geom_vline(xintercept = input$param_t0, linetype = "dashed") +
       geom_line(aes(x=exposure_duration,y=p,color=as.factor(score)), scores) +
-      annotate("line",x=x,y=if(max_score > 0) expected_score/max_score else expected_score,color="black",linewidth=1) +
-      scale_y_continuous(name = "Score probability", sec.axis = sec_axis(~.*max(1,max_score), name = "Expected (mean) score"), limits = c(0,1))
+      annotate("line",x=x,y=if(max_score() > 0) expected_score/max_score() else expected_score,color="black",linewidth=1) +
+      scale_y_continuous(name = "Score probability", sec.axis = sec_axis(~.*max(1,max_score()), name = "Expected (mean) score"), limits = c(0,1))
   })
   
   
