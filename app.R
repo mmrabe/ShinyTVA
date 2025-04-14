@@ -173,7 +173,7 @@ ui <- fluidPage(
         tabPanel(
           "Scores",
           tags$h2("Scores"),
-          tags$p(HTML("The model is stochastic (non-deterministic). For the same display configuration and parameter set, it can generate different report sets. Let the number of correctly reported targets be the <strong>score</strong>. Then the score for a single trial can be as low as 0 if no target was reported but it may not exceed \U1D43E or the number of items.")),
+          tags$p(HTML("The model is stochastic (non-deterministic). For the same display configuration and parameter set, it can generate different report sets. Let the number of correctly reported targets be the <strong>score</strong>. Then the score for a single trial can be as low as 0 if no target was reported but it may not exceed \U1D43E or the number of targets.")),
           tags$h2("Probability distribution of scores"),
           tags$p("Based on the display settings and model parameters on the left, the theoretical distribution of predicted scores looks as follows:"),
           plotOutput("theoreticalprobs"),
