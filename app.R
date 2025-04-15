@@ -106,6 +106,7 @@ ui <- fluidPage(
     sidebarPanel(
       
       inputPanel(
+        tags$h4("Display settings"),
         numericInput("items",
                      "Number of items:",
                      min = 2,
@@ -122,16 +123,17 @@ ui <- fluidPage(
         numericInput("exposure_duration", "Exposure duration", min = 10, max = 500, value = 100)
       ),
       inputPanel(
+        tags$h4("Model parameters"),
         sliderInput("param_C",
-                    "\U1D436",
+                    "Processing speed (\U1D436)",
                     min = 1,
                     max = 200,
                     value = 50
         ),
-        sliderInput("param_t0","\U1D461\U2080",min=-50,max=50,value=10),
-        sliderInput("param_K","\U1D43E",min=0,max=6,value=4),
+        sliderInput("param_t0","Sensory threshold (\U1D461\U2080)",min=-50,max=50,value=10),
+        sliderInput("param_K","VSTM capacity (\U1D43E)",min=0,max=6,value=4),
          sliderInput("param_alpha",
-                     "\U1D6FC",
+                     "Selectivity (\U1D6FC)",
                      min = 0,
                      max = 2,
                      step = 0.1,
@@ -157,10 +159,10 @@ ui <- fluidPage(
           tags$h2("Theoretical processing times"),
           tags$p("The processing capacity \U1D436 can be interpreted as the theoretical number of items that could be processed per second if memory were unlimited. Depending on the specific model implementation, TVA can make different assumptions about the distribution of \U1D436 across items. In this app, we assume it is equally distributed across locations but that targets and distractors differ with regard to their relative share, such that a distractor receives \U1D6FC-times the processing of a target. This is called ",tags$strong("filtering"),". The individual processing rates are given as: $$v_i=C\\frac{w_i}{\\sum_{j} w_j}; w_i=\\begin{cases} \\alpha & \\text{if } i \\in D  \\\\ 1 & \\text{if } i \\notin D \\end{cases} $$" %>% withMathJax()),
           tags$p("TVA assumes that all items are processed ",tags$strong("in parallel")," and that each item’s processing time is exponentially distributed, so that the probability that item \U1D456 is processed sometime before \U1D461 is given as $$\\Pr\\left(i,T\\leq t\\right)=1-\\exp(-t v_i).$$" %>% withMathJax()),
-          conditionalPanel("input.distractors > 0", tags$p(HTML("The theoretical processing time distributions for <font color=red>targets</font> vs. <font color=blue>distractors</font> look as follows:"))),
-          conditionalPanel("input.distractors == 0", tags$p(HTML("The theoretical processing time distribution for <font color=red>targets</font> looks as follows:"))),
+          conditionalPanel("input.distractors > 0", tags$p(HTML("The theoretical processing time distributions for a single <font color=red>target</font> vs. a single <font color=blue>distractor</font> look as follows:"))),
+          conditionalPanel("input.distractors == 0", tags$p(HTML("The theoretical processing time distribution for a single <font color=red>target</font> looks as follows:"))),
           plotOutput("singleproc"),
-          tags$p("The cumulative probability formally describes the probability that the processing time for item \U1D456 is less than or equal to \U1D461. It is the same as the probability that \U1D456 was processed some time before \U1D461. Its derivative, the probability density, is more informative to compare the relative likelihood of different possible processing times. It is highest for the most likely processing time.")
+          tags$p("The cumulative probability formally describes the probability that the processing time for item \U1D456 is less than or equal to \U1D461. It is the same as the probability that \U1D456 was processed some time before \U1D461. Its derivative, the probability density, is more informative to compare the relative likelihood of different possible processing times. It is highest for the most likely processing time. In both panels, the vertical dashed line represents the exposure duration from the display settings pane.")
         ),
         tabPanel(
           "Simulate trial",
@@ -177,7 +179,7 @@ ui <- fluidPage(
           tags$h2("Probability distribution of scores"),
           tags$p("Based on the display settings and model parameters on the left, the theoretical distribution of predicted scores looks as follows:"),
           plotOutput("theoreticalprobs"),
-          tags$p("The colored lines are the probabilities for a given score as a function of exposure duration. The solid black line is the expected (mean) score, i.e. the mean score we would expect when collecting an infinite number of trials."),
+          tags$p("The colored lines are the probabilities for a given score as a function of exposure duration. The solid black line is the expected (mean) score, i.e. the mean score we would expect when collecting an infinite number of trials. The vertical dashed line represents the exposure duration from the display settings pane."),
           #tags$ol(
           #  tags$li("Before \U1D461\U2080, the only possible score is 0."),
           #  tags$li("With longer exposure, the probability for an empty report gradually declines, as long as at least one target is present."),
@@ -296,7 +298,7 @@ server <- function(input, output, session) {
     }
   })
   
-  upper_bound <- reactive(qexp(.995,input$param_C/1000/input$items))
+  upper_bound <- reactive(max(input$exposure_duration,qexp(.95,input$param_C/1000/input$items)))
   
   single_run <- reactive({
     input$newSimulation
@@ -374,14 +376,16 @@ server <- function(input, output, session) {
         (if(input$distractors > 0L) geom_function(fun = function(x) if_else(x <= input$param_t0, 0, pexp(x-input$param_t0, input$param_C/1000*input$param_alpha/wsum)), xlim = c(input$param_t0,upper_bound()), color = "blue", linetype = if(input$param_alpha!=1) "solid" else "dashed")) +
         annotate("segment", y = 0, x = 0, xend = input$param_t0, color = "red") +
         (if(input$distractors > 0L) annotate("segment", y = 0, x = 0, xend = input$param_t0, color = "blue", linetype = "dashed")) +
+        geom_vline(xintercept = input$exposure_duration, linetype = "dashed")+
         scale_x_continuous(limits = c(0,upper_bound()), name = "Exposure duration") +
-        scale_y_continuous(name = "Cumulative processing probability"),
+        scale_y_continuous(name = "Cumulative processing probability", limits = c(0,1)),
       ggplot() +
         theme_minimal() +
         geom_function(fun = function(x) dexp(x-input$param_t0, input$param_C/1000/input$items), xlim = c(input$param_t0,upper_bound()), color = "red") +
         (if(input$distractors > 0L) geom_function(fun = function(x) dexp(x-input$param_t0, input$param_C/1000*input$param_alpha/wsum), xlim = c(input$param_t0,upper_bound()), color = "blue", linetype = if(input$param_alpha!=1) "solid" else "dashed")) +
         annotate("segment", y = 0, x = 0, xend = input$param_t0, color = "red") +
         (if(input$distractors > 0L) annotate("segment", y = 0, x = 0, xend = input$param_t0, color = "blue", linetype = "dashed")) +
+        geom_vline(xintercept = input$exposure_duration, linetype = "dashed")+
         scale_x_continuous(limits = c(0,upper_bound()), name = "Exposure duration") +
         scale_y_continuous(name = "Processing probability density"),
       nrow = 1
@@ -422,16 +426,16 @@ server <- function(input, output, session) {
   
   
   output$theoreticalprobs <- renderPlot({
-    x <- seq(0,upper_bound(),length.out=200)
-    scores <- crossing(exposure_duration = x, score = 0:max_score()) %>% mutate(p = pscorev(score,exposure_duration,input$items,input$distractors,input$param_C,input$param_alpha,input$param_K,input$param_t0))
+    x <- seq(input$param_t0,upper_bound(),length.out=200)
+    scores <- crossing(exposure_duration = x, score = 0:max_score()) %>% mutate(p = pscorev(score,exposure_duration,input$items,input$distractors,input$param_C,input$param_alpha,input$param_K,input$param_t0)) %>% bind_rows(tibble(exposure_duration=0,score=0:max_score())%>%mutate(p=if_else(score==0,1,0)))
     expected_score <- rowSums(as.matrix(vapply(0:max_score(), function(i) if(i==0) rep(0,length(x)) else i*pscorev(i,x,input$items,input$distractors,input$param_C,input$param_alpha,input$param_K,input$param_t0), double(length(x)))))
     ggplot() +
       theme_minimal() +
       theme(legend.position = "bottom") +
       labs(x="Exposure duration", color = "Score") +
-      geom_vline(xintercept = input$param_t0, linetype = "dashed") +
+      geom_vline(xintercept = input$exposure_duration, linetype = "dashed") +
       geom_line(aes(x=exposure_duration,y=p,color=as.factor(score)), scores) +
-      annotate("line",x=x,y=if(max_score() > 0) expected_score/max_score() else expected_score,color="black",linewidth=1) +
+      annotate("line",x=c(0,x),y=c(0,if(max_score() > 0) expected_score/max_score() else expected_score),color="black",linewidth=1) +
       scale_y_continuous(name = "Score probability", sec.axis = sec_axis(~.*max(1,max_score()), name = "Expected (mean) score"), limits = c(0,1))
   })
   
