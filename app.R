@@ -192,7 +192,11 @@ ui <- fluidPage(
           tags$h2("Simulate a subject data set"),
           tags$p("Here, you can simulate many trials with different display settings. The parameters on the left are assumed to be the same for all trials. By default, the table below lists the configuration of a typical CombiTVA paradigm with 6 items and varying numbers of distractors and exposure durations. You can edit, add, and remove settings (by right click)."),
           rHandsontableOutput("simtab"),
-          tags$p("By ",actionLink("simulate","clicking here"),", you can run the simulation as configured above. The columns ",tags$strong("MeanScore")," and ",tags$strong("SEScore")," will be filled in with the mean and standard error of the simulated trials, respectively. You can, however, also fill in or edit those columns by hand. When the table above changes, the values are also visualized in the plot below:"),
+          tags$div(
+            actionButton("simulate","Simulate"),
+            downloadButton("downloadSummary","Summary")
+          ),
+          tags$p(HTML("By clicking on <strong>Simulate</strong>, you can run the simulation as configured above. The columns <strong>MeanScore</strong> and <strong>SEScore</strong> will be filled in with the mean and standard error of the simulated trials, respectively. You can, however, also fill in or edit those columns by hand. When the table above changes, the values are also visualized in the plot below:")),
           plotOutput("simscores"),
           tags$p("Solid lines connect mean scores for the same display type over its different exposure durations, if any. Error bars represent simple standard errors around those means. The dashed lines represent the theoretical (predicted) mean scores for the different display types. You should observe that the predicted curves align with the observed scores.")
         )
@@ -257,6 +261,10 @@ server <- function(input, output, session) {
     }
   })
   
+  output$downloadSummary <- downloadHandler("Summary.csv", function(file) {
+    write.csv(session$userData$simulations, file, row.names = FALSE, col.names = TRUE)
+  })
+  
   output$simtab <- renderRHandsontable({
     input$simulate
     rhandsontable(session$userData$simulations)
@@ -284,7 +292,8 @@ server <- function(input, output, session) {
       geom_point() +
       geom_linerange(aes(ymin=MeanScore-SEScore,ymax=MeanScore+SEScore)) +
       geom_line() +
-      geom_line(linetype="dashed", data=predicted)
+      geom_line(linetype="dashed", data=predicted) +
+      labs(x = "Exposure duration", y = "Mean score", color = "Display type")
   })
   
   
