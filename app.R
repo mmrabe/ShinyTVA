@@ -292,10 +292,11 @@ server <- function(input, output, session) {
       rowwise() %>%
       reframe(
         Exposure = seq(0,max(dat$Exposure),length.out = 200),
-        MeanScore = rowSums(as.matrix(vapply(0:min(input$items,input$param_K), function(i) if(i==0) rep(0,length(Exposure)) else i*pscorev(i,Exposure,Items,Distractors,input$param_C,input$param_alpha,input$param_K,input$param_t0), double(length(Exposure)))))
+        MeanScore = rowSums(as.matrix(vapply(0:min(Items,input$param_K), function(i) if(i==0) rep(0,length(Exposure)) else i*pscorev(i,Exposure,Items,Distractors,input$param_C,input$param_alpha,input$param_K,input$param_t0), double(length(Exposure)))))
       )
     
     dat %>%
+      na.omit() %>%
       ggplot(aes(x=Exposure, y=MeanScore, group = `Display Type`, color = `Display Type`)) +
       theme_minimal() +
       theme(legend.position = "bottom") +
@@ -428,7 +429,8 @@ server <- function(input, output, session) {
     memory_capacity <- input$param_K
     exposure_duration <- input$exposure_duration
     
-    which_first_after_ed <- min(dat$processing_order[dat$processing_time > exposure_duration])
+    
+    which_first_after_ed <- if(any(dat$processing_time > exposure_duration)) min(dat$processing_order[dat$processing_time > exposure_duration]) else NA_integer_
     
     
     dat$pos <- 1+dat$processing_order+(dat$processing_order>memory_capacity)+(dat$processing_time>exposure_duration)
