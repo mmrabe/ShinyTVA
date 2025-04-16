@@ -172,7 +172,7 @@ ui <- fluidPage(
           conditionalPanel("input.distractors > 0", tags$p(HTML("The theoretical processing time distributions for a single <font color=red>target</font> vs. a single <font color=blue>distractor</font> look as follows:"))),
           conditionalPanel("input.distractors == 0", tags$p(HTML("The theoretical processing time distribution for a single <font color=red>target</font> looks as follows:"))),
           plotOutput("singleproc"),
-          tags$p("The cumulative probability formally describes the probability that the processing time for item \U1D456 is less than or equal to \U1D461. It is the same as the probability that \U1D456 was processed some time before \U1D461. Its derivative, the probability density, is more informative to compare the relative likelihood of different possible processing times. It is highest for the most likely processing time. In both panels, the vertical dashed line represents the exposure duration from the display settings pane.")
+          tags$p("The cumulative probability formally describes the probability that the processing time for item \U1D456 is less than or equal to \U1D461. It is the same as the probability that \U1D456 was processed some time before \U1D461. Its derivative, the probability density, is more informative to compare the relative likelihood of different possible processing times. It is highest for the most likely processing time. In both panels, the vertical dashed line represents the exposure duration from the display settings pane. At that time, the model predicts ",htmlOutput("procpred",inline = TRUE)),
         ),
         tabPanel(
           "Simulate trial",
@@ -189,7 +189,7 @@ ui <- fluidPage(
           tags$h2("Probability distribution of scores"),
           tags$p("Based on the display settings and model parameters on the left, the theoretical distribution of predicted scores looks as follows:"),
           plotOutput("theoreticalprobs"),
-          tags$p("The colored lines are the probabilities for a given score as a function of exposure duration. The solid black line is the expected (mean) score, i.e. the mean score we would expect when collecting an infinite number of trials. The vertical dashed line represents the exposure duration from the display settings pane."),
+          tags$p("The colored lines are the probabilities for a given score as a function of exposure duration. The solid black line is the expected (mean) score, i.e. the mean score we would expect when collecting an infinite number of trials. The vertical dashed line represents the exposure duration from the display settings pane. At that time, the model predicts ",htmlOutput("scorepred2", inline=TRUE)),
           #tags$ol(
           #  tags$li("Before \U1D461\U2080, the only possible score is 0."),
           #  tags$li("With longer exposure, the probability for an empty report gradually declines, as long as at least one target is present."),
@@ -322,6 +322,16 @@ server <- function(input, output, session) {
   single_run <- reactive({
     input$newSimulation
     simulate_trial(items(), input$exposure_duration, input$param_C, input$param_alpha, input$param_K, input$param_t0)
+  })
+  
+  output$procpred <- renderText({
+    v_target <- input$param_C/1000/(input$items+input$distractors*(input$param_alpha-1))
+    v_distractor <- input$param_C/1000*input$param_alpha/(input$items+input$distractors*(input$param_alpha-1))
+    if(input$distractors > 0) {
+      sprintf("any given <font color=red>target</font> has been processed with a probability of %.1f%% and any given <font color=blue>distractor</font> with a probability of %.1f%%.", pexp(input$exposure_duration-input$param_t0,v_target)*100, pexp(input$exposure_duration-input$param_t0,v_distractor)*100)
+    } else {
+      sprintf("any given stimulus (all of which are <font color=red>targets</font>) has been processed with a probability of %.1f%%.", pexp(input$exposure_duration-input$param_t0,v_target)*100)
+    }
   })
   
   output$display <- renderPlot({
@@ -458,6 +468,10 @@ server <- function(input, output, session) {
       scale_y_continuous(name = "Score probability", sec.axis = sec_axis(~.*max(1,max_score()), name = "Expected (mean) score"), limits = c(0,1))
   })
   
+  output$scorepred2 <- renderText({
+    p <- pscorev(0:max_score(),input$exposure_duration,input$items,input$distractors,input$param_C,input$param_alpha,input$param_K,input$param_t0)
+    paste0(paste(sprintf("a score of %d with %.1f%%", 0:max_score(), p*100), collapse=", "),sprintf(", and therefore an expected score of %.1f.", sum((0:max_score())*p)))
+  })
   
   
   
