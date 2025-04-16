@@ -9,6 +9,7 @@ library(pracma)
 library(scales)
 library(rhandsontable)
 library(cowplot)
+library(Rmpfr)
 
 
 logsumexp <- function(logs, na.rm = FALSE) {
@@ -26,6 +27,8 @@ logsumexp <- function(logs, na.rm = FALSE) {
   logs[maxlog] + log1p(sum(exp(logs[-maxlog]-logs[maxlog])))
 }
 
+logdiffexp <- function(log_a, log_b) log_b+log1mexp(log_b-log_a)
+
 
 ptvaw <- function(R, tau, K, v) {
   nR <- sum(R)
@@ -42,14 +45,21 @@ ptvaw <- function(R, tau, K, v) {
       Rmi[i] <- FALSE
       Rmi <- which(Rmi)
       nRmi <- length(Rmi)
-      log(v[i]) + log(sum((vapply(0:nRmi, \(k) {
+      sp <- double(0)
+      sm <- double(0)
+      for(k in 0:nRmi) {
         PRmi <- if(k > 0) combinations(nRmi, k, Rmi) else matrix(integer(), 1, 0)
-        sum(vapply(seq_len(nrow(PRmi)), \(j) {
+        for(j in seq_len(nrow(PRmi))) {
           J <- PRmi[j,]
           vsum <- (v[i] + sum(v[J]) + sum(v[SmR]))
-          (-1) ^ length(J) * (1 - exp(-tau*vsum)) / vsum
-        }, double(1)))
-      }, double(1)))))
+          if(length(J) %% 2L) {
+            sp <- c(sp, pexp(tau,vsum,log.p=TRUE)-log(vsum))
+          } else {
+            sm <- c(sm, pexp(tau,vsum,log.p=TRUE)-log(vsum))
+          }
+        }
+      }
+      log(v[i]) + logdiffexp(logsumexp(sp), logsumexp(sm))
     }, double(1)))
   }
 }
