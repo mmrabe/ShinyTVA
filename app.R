@@ -411,7 +411,7 @@ server <- function(input, output, session) {
         scale_y_continuous(name = "Cumulative processing probability", limits = c(0,1)),
       ggplot() +
         theme_minimal() +
-        geom_function(fun = function(x) dexp(x-input$param_t0, input$param_C/1000/input$items), xlim = c(input$param_t0,upper_bound()), color = "red") +
+        geom_function(fun = function(x) dexp(x-input$param_t0, input$param_C/1000/wsum), xlim = c(input$param_t0,upper_bound()), color = "red") +
         (if(input$distractors > 0L) geom_function(fun = function(x) dexp(x-input$param_t0, input$param_C/1000*input$param_alpha/wsum), xlim = c(input$param_t0,upper_bound()), color = "blue", linetype = if(input$param_alpha!=1) "solid" else "dashed")) +
         annotate("segment", y = 0, x = 0, xend = input$param_t0, color = "red") +
         (if(input$distractors > 0L) annotate("segment", y = 0, x = 0, xend = input$param_t0, color = "blue", linetype = "dashed")) +
